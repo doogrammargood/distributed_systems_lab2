@@ -45,6 +45,8 @@ def receive_message(message_from_client, address):
     delay=random.random()*5
     time.sleep(delay)    #stimulate delay
     #print("receive message:"+message_from_client["sender_id"]+" "+message_from_client["local_clock"]+"at"+time.time())  #for check purpose
+    print message_from_client["local_clock"]
+    print Vclock[client_number(address)]
     if message_from_client["local_clock"] == Vclock[client_number(address)]:
         Vclock[client_number(address)]+=1
         sequence+=1
@@ -68,3 +70,5 @@ if __name__ == '__main__':
     while True:
         message,address = server.recvfrom(1024)
         receive_message(pickle.loads(message), address)
+        print "got a message from"
+        print address
