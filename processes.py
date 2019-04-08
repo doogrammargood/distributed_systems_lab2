@@ -20,10 +20,11 @@ def wrap_message(message):
 def send_message(message,clock):
     sock.sendto(wrap_message(message), sequencer_address)
     clock = clock+1
-send_message("weird",clock)
+#send_message("weird",clock)
 
 def deliver_message(message):
     print "You've got mail!"
+    print message
 
 def cascade_deliveries():
     global hold_back_list
@@ -39,6 +40,7 @@ def cascade_deliveries():
 
 def receive_message(message_from_seq):
     #print message_from_seq
+    print "message received!"
     global expected_sequence_number
     if message_from_seq["seq_num"] == expected_sequence_number:
         deliver_message(message_from_seq)
@@ -47,9 +49,15 @@ def receive_message(message_from_seq):
     elif not message_from_seq["seq_num"] in map(lambda x: x["seq_num"],hold_back_list):
         #as long as this isnt a duplicate
         hold_back_list.append(message_from_seq)
+def listen_for_message():
+    global clock
+    while True:
+        message = input("Ready for your message")
+        send_message(message,clock)
+
+
+input_thread = threading.Thread(target = listen_for_message)
+input_thread.start()
 while True:
     message, address = sock.recvfrom(1024)
-    #print pickle.loads(message)
     receive_message(pickle.loads(message))
-    # if message["message_contents"] == "weird":
-    #     print "thats weird"
