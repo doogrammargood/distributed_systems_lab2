@@ -30,15 +30,22 @@ def wrap_message(message):
     dict = {"sender_id": process_id, "message_contents": message, "local_clock": clock}#, "seq_num": 1}
     return pickle.dumps(dict)
 
+lock = threading.Lock()
 def send_message(message):
     global clock
-    sock.sendto(wrap_message(message), sequencer_address)
-    clock = clock+1
+    lock.acquire()
+    try:
+        sock.sendto(wrap_message(message), sequencer_address)
+        clock = clock+1
+    finally:
+        lock.release()
 
 def deliver_message(message):
     # print "You've got mail!"
     # print message
     delivered_messages.append(message)
+    global expected_sequence_number
+    expected_sequence_number +=1
     if test_behavior == 1:
         if int(message['message_contents'][0]) == process_id:
             next_process = (process_id +1)%4
@@ -52,42 +59,53 @@ def pretty_print_messages(queue):
         text = colored(message["message_contents"], colors[message["sender_id"]])
         print text
 
+cascade_lock = threading.Lock()
+
 def cascade_deliveries():
-    global hold_back_list
-    global expected_sequence_number
-    hold_back_list = sorted(hold_back_list, key = lambda x: x["seq_num"])
-    #well sort the messages, then check that
-    for message in hold_back_list:
-        if expected_sequence_number == message["seq_num"]:
-            deliver_message(message)
-            expected_sequence_number +=1
-        else:
-            return
+    cascade_lock.acquire()
+    try:
+        global hold_back_list
+        global expected_sequence_number
+        hold_back_list = sorted(hold_back_list, key = lambda x: x["seq_num"])
+        #well sort the messages, then check that
+        for message in hold_back_list:
+            if expected_sequence_number == message["seq_num"]:
+                deliver_message(message)
+                #hold_back_list.remove(message)
+        hold_back_list = filter(lambda message: message["seq_num"]>expected_sequence_number,hold_back_list)
+    finally:
+        cascade_lock.release()
+    return
 
 def receive_message(message_from_seq):
-    #print message_from_seq
-    #print "message received!"
     delay=random.random()*5
     time.sleep(delay)    #stimulate delay
     global expected_sequence_number
     global delivered_messages
     global hold_back_list
+    print "recieved message", message_from_seq
+    print expected_sequence_number
     if message_from_seq["seq_num"] == expected_sequence_number:
         deliver_message(message_from_seq)
-        expected_sequence_number += 1
         cascade_deliveries()
     elif not message_from_seq["seq_num"] in map(lambda x: x["seq_num"],hold_back_list):
         #as long as this isnt a duplicate
-        hold_back_list.append(message_from_seq)
+        cascade_lock.acquire()
+        try:
+            hold_back_list.append(message_from_seq)
+        finally:
+            cascade_lock.release()
 def listen_for_message():
-    #listens for messages from keyboard
+    #listens for messages from keyboard, only for test_behavior = 0
     global clock
     while True:
         message = input()
         send_message(message)
 def send_messages_randomly():
+    #This method is specifically for test 2
     global clock
-    while True:
+    global test2_ongoing
+    while test2_ongoing:
         delay=random.random()
         time.sleep(delay)
         send_message("%d" %clock)
@@ -114,12 +132,15 @@ elif test_behavior == 1:
     pretty_print_messages(delivered_messages)
 elif test_behavior == 2:
     #In this test behavior, each process will continually send messages.
-    time.sleep(10) #so that there's enough time to start all of the processes before any send messages.
+    time.sleep(15) #so that there's enough time to start all of the processes before any send messages.
     print "starting"
+    test2_ongoing = True
     sending_thread = threading.Thread(target = send_messages_randomly)
     sending_thread.start()
     while len(delivered_messages)<10:
         message, address = sock.recvfrom(1024)
         receive_thread = threading.Thread(target = receive_message, args = (pickle.loads(message),))
         receive_thread.start()
+    test2_ongoing = False
+
     pretty_print_messages(delivered_messages)

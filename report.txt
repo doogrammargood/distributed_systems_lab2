@@ -1,0 +1,40 @@
+The simplest approach to achieving logical ordering is with a sequencer.
+In general, the simplest approach to achieving causal ordering is through the use of vector clocks.
+In our scenario, each message follows a simple trajectory through the sequencer which allows us to treat
+causal ordering as FIFO ordering between each process and the sequencer. This is possible because once the sequencer sets
+the sequence numbers, the ordering of the messages is fixed for all processes. Therefore, it is enough to ensure
+that causality is not violated at the sequencer. We do this by using a local clock for each process, which is
+the number of messages that process has sent. The sequencer keeps a dictionary for all of the local clocks of participating processes.
+We can think of the local clocks as vector clocks where we are blind to the times on other processes.
+The sequencer's dictionary is in fact a vector clock, where we do not bother to update from processes other than the sender.
+Again, the simplification is possible because we know that all messages pass through the sequencer, so the sequencer always has the most
+up-to-date readings for the times on every process, and will never need to be updated "through the grapevine."
+
+Our design led to a natural division of labor:
+Felix worked on the sequencer, while Victor worked on the processes.
+
+To aid development, we created 3 test modes:
+  0, where messages can be sent by typing on the keyboard,
+  1, where messages are broadcast cyclically, 1->2->3->4
+  2, where each process sends messages randomly.
+
+For the second two modes, after 10 messages have been delivered, each process will pretty-print the delivered messages.
+The colors of these messages correspond to the sender.
+
+The first test mode is insufficient, because manual inputs are slow, so concurrency issuse will never appear.
+The second test mode has a similar defect in that messages will only arrive one-at-a-time to the sequencer.
+The third test mode has an entirely random pattern of messages so it is difficult for development.
+
+INSTRUCTIONS:
+The default test mode is 2. This can be modified by changing the variable test_behavior in processes.py
+
+To run the project, open 5 command prompts. The processes in test mode 2 wait 15 seconds before sending messages,
+so the processes must be started within 15 seconds. This timer can be adjusted in the last paragraph of code of processes.py
+
+In the zeroth:
+  python sequencer.py 12001 12002 12003 12004
+  #the numbers are the port numbers used by the participating processes#
+
+In the ith (i from 1 to 4):
+  python processes.py i 8080
+  #The i is the id. of the sequence number, 8080 is the port of the sequencer.#

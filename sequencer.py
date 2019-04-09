@@ -48,9 +48,12 @@ def receive_message(message_from_client, address):
     #     client.add(address)
     thread.start()
 
+lock = threading.Lock()
+
 def run(message_from_client):
     global Vclock
     global sequence
+    global hold_back_list
     delay=random.random()*5
     time.sleep(delay)    #stimulate delay
     print("receive message from id:%d,with LC:%d at %f"%(message_from_client["sender_id"],message_from_client["local_clock"],time.time()))  #for check purpose
@@ -58,28 +61,37 @@ def run(message_from_client):
     print Vclock[message_from_client["sender_id"]]
     if message_from_client["local_clock"] == Vclock[message_from_client["sender_id"]]:
         print "in if statement"
-        Vclock[message_from_client["sender_id"]]+=1
-        sequence+=1
         print sequence
-        send_message(message_from_client["message_contents"],sequence,+message_from_client["sender_id"])
-        check=-1
-        while (check < 0):
-            check+=1
-            for n in hold_back_list:
+        lock.acquire()
+        try:
+            sequence+=1
+            Vclock[message_from_client["sender_id"]]+=1
+            send_message(message_from_client["message_contents"],sequence,+message_from_client["sender_id"])
+            check=-1
+            while (check < 0):
                 check+=1
-                if (message_from_client["sender_id"] == n["sender_id"]):
-                    if(Vclock[message_from_client["sender_id"]] == n["local_clock"]):
-                        send_message(n["message_contents"],sequence+1,n["sender_id"])
-                        print("send message:%s with sequence:%d,sender_id:%d localclock:%d"%(n["message_from_client"],sequence+1,n["sender_id"],n["local_clock"]))
-                        Vclock[message_from_client["sender_id"]]+=1
-                        sequence+=1
-                        check-=1
-                        check-=len(hold_back_list)
-                        hold_back_list.remove(n)
+                for n in hold_back_list:
+                    check+=1
+                    if (message_from_client["sender_id"] == n["sender_id"]):
+                        if(Vclock[message_from_client["sender_id"]] == n["local_clock"]):
+                            send_message(n["message_contents"],sequence+1,n["sender_id"])
+                            print("send message:%s with sequence:%d,sender_id:%d localclock:%d"%(n["message_contents"],sequence+1,n["sender_id"],n["local_clock"]))
+                            Vclock[message_from_client["sender_id"]]+=1
+                            sequence+=1
+                            check-=1
+                            check-=len(hold_back_list)
+                            hold_back_list.remove(n)
+        finally:
+            lock.release()
 
     else:
         print "hold back list appended"
-        hold_back_list.append(message_from_client)
+        print Vclock
+        lock.acquire()
+        try:
+            hold_back_list.append(message_from_client)
+        finally:
+            lock.release()
         print hold_back_list
 
 if __name__ == '__main__':
