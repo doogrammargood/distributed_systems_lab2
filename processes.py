@@ -3,9 +3,12 @@ import socket
 import threading
 import pickle
 from termcolor import colored
+import random
+import time
+
 #def __main__():
 #print sys.argv
-test_behavior = 1
+test_behavior = 2
 #test behavior 0 accepts messages from the command line.
 # '''''''''''''1 sends a message to the next process.
 
@@ -63,34 +66,60 @@ def cascade_deliveries():
 
 def receive_message(message_from_seq):
     #print message_from_seq
-    print "message received!"
+    #print "message received!"
+    delay=random.random()*5
+    time.sleep(delay)    #stimulate delay
     global expected_sequence_number
     global delivered_messages
     global hold_back_list
     if message_from_seq["seq_num"] == expected_sequence_number:
         deliver_message(message_from_seq)
-        cascade_deliveries()
         expected_sequence_number += 1
+        cascade_deliveries()
     elif not message_from_seq["seq_num"] in map(lambda x: x["seq_num"],hold_back_list):
         #as long as this isnt a duplicate
         hold_back_list.append(message_from_seq)
 def listen_for_message():
+    #listens for messages from keyboard
     global clock
     while True:
-        #message = input("Ready for your message")
         message = input()
-        # if message == "pretty print delivered":
-        #     pretty_print_messages(delivered_messages)
-        # elif message == "pretty print hold back":
-        #     pretty_print_messages(hold_back_list)
         send_message(message)
+def send_messages_randomly():
+    global clock
+    while True:
+        delay=random.random()
+        time.sleep(delay)
+        send_message("%d" %clock)
 
 if test_behavior ==0:
+    #This is the default behavior, where the user inputs a message to send to the other processes.
     input_thread = threading.Thread(target = listen_for_message)
     input_thread.start()
+    while True:
+        message, address = sock.recvfrom(1024)
+        receive_thread = threading.Thread(target = receive_message, args = (pickle.loads(message),))
+        receive_thread.start()
+        #receive_message(pickle.loads(message))
 elif test_behavior == 1:
+    #This is the test behavior, where process 1 sends a message containing '2',
+    #process 2 sends a message containing '3', and so forth cyclically.
+    #Then we check after 10 messages that the delivered messages follow the desired order.
     if process_id == 1:
         send_message("2 please forward this message.")
-while True:
-    message, address = sock.recvfrom(1024)
-    receive_message(pickle.loads(message))
+    while len(delivered_messages)<10:
+        message, address = sock.recvfrom(1024)
+        receive_thread = threading.Thread(target = receive_message, args = (pickle.loads(message),))
+        receive_thread.start()
+    pretty_print_messages(delivered_messages)
+elif test_behavior == 2:
+    #In this test behavior, each process will continually send messages.
+    time.sleep(10) #so that there's enough time to start all of the processes before any send messages.
+    print "starting"
+    sending_thread = threading.Thread(target = send_messages_randomly)
+    sending_thread.start()
+    while len(delivered_messages)<10:
+        message, address = sock.recvfrom(1024)
+        receive_thread = threading.Thread(target = receive_message, args = (pickle.loads(message),))
+        receive_thread.start()
+    pretty_print_messages(delivered_messages)
